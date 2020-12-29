@@ -1,13 +1,14 @@
 var mysql = require('mysql');
 const nodemailer = require("nodemailer");
 
-var connection = mysql.createConnection({
-  host: 'fdb21.awardspace.net',
-  port: '3306',
-  user: '2734291_data',
-  password: 'HATSoff@2018',
-  database: '2734291_data',
-})
+var pool  = mysql.createPool({
+  connectionLimit : 10,
+  host            : 'fdb21.awardspace.net',
+  user            : '2734291_data',
+  password        : 'password',
+  database        : '2734291_data',
+  port            : '3306'
+});
 
 function getRandomText() {
   var charset = "0123456789".match(/./g);
@@ -17,8 +18,6 @@ function getRandomText() {
 }
 
 async function mail(receiver, code) {
-
-let testAccount = await nodemailer.createTestAccount();
 
 const transporter = nodemailer.createTransport({
     host: 'smtp.ethereal.email',
@@ -79,26 +78,29 @@ exports.logOut=(req, res, next) => {
 
 exports.loginHub=(req, res, next) => {
 
-  connection.connect();
-  console.log(connection);
+  console.log(pool);
 
-  connection.query("SELECT * FROM auth2 WHERE address = '"+ req.body.email +"'", function (err, rows, fields) {
+  pool.query("SELECT * FROM auth2 WHERE address = '"+ req.body.email +"'", function (err, rows, fields) {
     if (err)
     {
+      throw err;
       console.log('Connection Failed');
       res.render('pages/login');
+      next();
     }
 
-    if(req.cookies.OTP != req.body.otp) {
+    else if(req.cookies.OTP != req.body.otp) {
         console.log(req.cookies.OTP);
         console.log("Invalid OTP");
         res.clearCookie('OTP');
         res.redirect('/login');
+        next();
     }
     else if(rows[0].email != req.body.email) {
         console.log("No User Found");
         res.clearCookie('OTP');
         res.redirect('/login');
+        next();
     } else {
         console.log("User Logged In");
         res.clearCookie('OTP');
@@ -109,7 +111,6 @@ exports.loginHub=(req, res, next) => {
     }
 
   });
-  connection.end();
 };
 
 exports.registerHub=(req, res, next) => {
@@ -122,22 +123,26 @@ exports.registerHub=(req, res, next) => {
       console.log("Invalid OTP");
       res.clearCookie('OTP');
       res.redirect('/login');
+      next();
   }
   else {
-    connection.query("SELECT * FROM auth2 WHERE address = '"+ req.body.email +"'",
+    connection.query("INSERT INTO auth(id, name, email, phone) VALUES ( 'NULL','" + req.body.name + "','" + req.body.email + "','" + req.body.phone + "')",
     function (err, rows, fields) {
       if (err)
       {
         console.log('Connection Failed');
         res.render('pages/register');
+        next();
+      }
+      else {
+        console.log("User Logged In");
+        res.clearCookie('OTP');
+        res.cookie('name', req.body.name, {expire:400000+Date.now()});
+        res.cookie('email', req.body.email, {expire:400000+Date.now()});
+        res.cookie('phone', req.body.phone, {expire:400000+Date.now()});
+        res.redirect('/main',);
       }
     });
     connection.end();
-    console.log("User Logged In");
-    res.clearCookie('OTP');
-    res.cookie('name', req.body.name, {expire:400000+Date.now()});
-    res.cookie('email', req.body.email, {expire:400000+Date.now()});
-    res.cookie('phone', req.body.phone, {expire:400000+Date.now()});
-    res.redirect('/main',);
   }
 };
